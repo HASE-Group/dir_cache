@@ -1,0 +1,185 @@
+PROJECT (
+	PREAMBLE (
+		NAME "DIRCACHE_V1"
+		VERSION 1.3
+		DESCRIPTION "Cache Coherence: Central directory"
+		 )
+	PARAMLIB (
+
+		ENUM (policy, [Update, Invalidate]);
+-- Struct definition for network packet and its associated link param
+
+		STRUCT (net_struct, [RSTRING (instr, "-",5), 
+                                     RINT (addr, 0),
+				     RINT (data, 0),
+				     RINT (dest, 0),
+				     RINT (source, 0)]);
+
+                LINK   (net_link, [(NET_PKT, RSTRUCT(net_struct, DP))]);
+	
+-- Struct definition for memory input queue register
+
+		STRUCT (q_struct, [RSTRING (instr, "-",5), 
+                                     RINT (addr, 0),
+				     RINT (data, 0),
+				     RINT (dest, 0),
+				     RINT (source, 0),
+				     RINT (valid, 0)]);
+
+-- Instruction set for the processors
+
+
+-- Struct for holding memory traces and processor link
+
+	STRUCT (mem_trace_struct, [RSTRING (instr,"-",5),
+				   RINT (addr,0), RINT(data,0)]);	
+
+                LINK (proc_link, [(DATA_PKT, RSTRUCT(mem_trace_struct, DP))]);
+
+-- Struct for holding one cache line: 1 int for the cache, and 1 int for the distributed directory.
+
+	STRUCT (cache_struct, [RINT (valid, 0),
+			       RINT (address, 0),
+			       RINT (data, 0)
+	]);
+
+-- Struct for the the data and directory entries in memory:
+
+	STRUCT (mem_struct, [RINT (data,0), RINT (entry1, 0), RINT (entry2, 0),
+			     RINT (entry3, 0), RINT (entry4, 0)]);
+
+
+-- Definition of integer array, for parameter values.
+	ARRAY (mem_array, mem_struct);
+	ARRAY (cache_array, cache_struct);
+	ARRAY (memory_trace, mem_trace_struct);
+	ARRAY (queue, q_struct);
+
+)
+	
+	GLOBALS (
+		RENUM (policy,Cache_Policy,0);
+		RINT (Max_Time_Left, 2000);
+		 RINT (nodes_done, 0)
+--	node_done is decremented by a cache when that cache receives a
+--	packet from its processor and incremented when the actions that
+--	this causes have finished. It is incremented by each processor
+--	when the processor reads an input which is not r, R, w, or W.
+--	The network checks nodes_done and stops the simulation when it
+--	reaches 4.
+	)
+	ENTITYLIB (
+
+		ABSTRACT Biclocked sync ( )
+		ABSTRACT BiclockedD sync ( )
+		ENTITY Clock sync ( )
+		ENTITY Clockphase sync ( )
+
+		ENTITY network (
+		EXTENDS (Biclocked)
+			DESCRIPTION("Interconnection Network")
+			STATES (NORMAL)
+			PARAMS (
+			)
+			PORTS (
+				PORT (to_mem, net_link, SOURCE);
+				PORT (from_mem, net_link, DESTINATION);
+				PORT (from_cache1, net_link, DESTINATION);
+				PORT (from_cache2, net_link, DESTINATION);
+				PORT (from_cache3, net_link, DESTINATION);
+				PORT (from_cache4, net_link, DESTINATION);
+				PORT (to_cache1, net_link, SOURCE);
+				PORT (to_cache2, net_link, SOURCE);
+				PORT (to_cache3, net_link, SOURCE);
+				PORT (to_cache4, net_link, SOURCE);
+			)
+			ATTRIB ()
+		);
+
+		ENTITY proc (
+		EXTENDS (Biclocked)
+			DESCRIPTION ("Processor1")
+			STATES (PROC_IDLE, PROC_BUSY)
+		        PARAMS (
+				RARRAY (memory_trace, mem_trace, 256);
+			)
+			PORTS  (
+				PORT (to_cache, proc_link, SOURCE);
+				PORT (from_cache, proc_link, DESTINATION);
+			)
+			ATTRIB ()	
+		);
+		ENTITY cache (
+		EXTENDS (Biclocked)
+			DESCRIPTION("cache1")
+			STATES (CACHE_IDLE, CACHE_BUSY)
+			PARAMS (
+                                RSTRING (Status,"__",5);
+				RARRAY (cache_array, cache_mem, 256);
+				static RRANGE (log_cache_size, 1, 8, 3)
+			)
+			PORTS (
+				PORT (to_proc, proc_link, SOURCE);
+				PORT (from_proc, proc_link, DESTINATION);
+				PORT (to_network, net_link, SOURCE);
+				PORT (from_network, net_link, DESTINATION);
+			)
+			ATTRIB ()
+		);
+		ENTITY memory (
+		EXTENDS (Biclocked)
+			DESCRIPTION("Memory")
+			STATES (MEMORY_IDLE, MEMORY_BUSY)
+			PARAMS (
+				RARRAY (mem_array, data_mem, 1024);
+			)
+			PORTS (
+				PORT (to_network, net_link, SOURCE);
+				PORT (from_network, net_link, DESTINATION);
+		)
+			ATTRIB ()
+		);
+        )
+	STRUCTURE (
+
+		AENTITY network NETWORK (DESCRIPTION ("interconnection network"));
+		AENTITY proc PROC1 (DESCRIPTION ("Processor 1"));
+		AENTITY proc PROC2 (DESCRIPTION ("Processor 2"));
+		AENTITY proc PROC3 (DESCRIPTION ("Processor 3"));
+		AENTITY proc PROC4 (DESCRIPTION ("Processor 4"));
+		AENTITY cache CACHE1 (DESCRIPTION ("Cache 1"));
+		AENTITY cache CACHE2 (DESCRIPTION ("Cache 2"));
+		AENTITY cache CACHE3 (DESCRIPTION ("Cache 3"));
+		AENTITY cache CACHE4 (DESCRIPTION ("Cache 4"));
+		AENTITY memory MEMORY  (DESCRIPTION ("Memory"));
+		AENTITY Clock CLOCK ( DESCRIPTION ("Clock"));
+		AENTITY Clockphase CPHASE (DESCRIPTION ("Clock display"));
+
+	CLINK (proc.PROC1[to_cache]->cache.CACHE1[from_proc],1);
+	CLINK (proc.PROC2[to_cache]->cache.CACHE2[from_proc],1);
+	CLINK (proc.PROC3[to_cache]->cache.CACHE3[from_proc],1);
+	CLINK (proc.PROC4[to_cache]->cache.CACHE4[from_proc],1);
+
+	CLINK (cache.CACHE1[to_proc]->proc.PROC1[from_cache],1)
+	CLINK (cache.CACHE2[to_proc]->proc.PROC2[from_cache],1)
+	CLINK (cache.CACHE3[to_proc]->proc.PROC3[from_cache],1)
+	CLINK (cache.CACHE4[to_proc]->proc.PROC4[from_cache],1)
+
+
+	CLINK (cache.CACHE1[to_network]->network.NETWORK[from_cache1],1);
+	CLINK (cache.CACHE2[to_network]->network.NETWORK[from_cache2],1);
+	CLINK (cache.CACHE3[to_network]->network.NETWORK[from_cache3],1);
+	CLINK (cache.CACHE4[to_network]->network.NETWORK[from_cache4],1);
+
+	
+	CLINK (network.NETWORK[to_cache1]->cache.CACHE1[from_network],1);
+	CLINK (network.NETWORK[to_cache2]->cache.CACHE2[from_network],1);
+	CLINK (network.NETWORK[to_cache3]->cache.CACHE3[from_network],1);
+	CLINK (network.NETWORK[to_cache4]->cache.CACHE4[from_network],1);
+
+	CLINK (network.NETWORK[to_mem]->memory.MEMORY[from_network],1);
+	CLINK (memory.MEMORY[to_network]->network.NETWORK[from_mem],1);
+
+	)
+)
+
