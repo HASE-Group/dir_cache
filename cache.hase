@@ -1,193 +1,239 @@
-c// Project:	Directory-based Coherence: singly-linked list
+// Project:	Directory-based Coherence: doubly-linked list
 // Entity	Cache
 // File		cache.hase
-// Date:	Jun 2006
-// Author:	Roland Ibbett, based on dir-cache V3
+// Date:	Aug 2005
+// Author:	Roland Ibbett, based on an earlier version by Max Magliana
 
 // Each line in the cache contains the following (integer) fields
 // in each of its 4 lines:
 // Valid
 // Address
-// Pointer to successor in list
+// Backward Pointer
+// Forward pointer
 
 // Packets contain the following fields:
 // Address: corresponds to a valid memory address
-// Source: indicates the source of the packet
+// Origin: indicates where the source of the packet. This usually 
+// 	   corresponds to a processor number
 // Destination: indicates where the packet is going
-// Pointer: 
 // Instruction, which can be one of the following:
 
-// R	Read			Sent from processor to cache.
-// W	Write			Sent from memory to cache
-// RR	Read Request		Sent from cache to memory.
-// WR	Write Request 		Sent from cache to memory.
-// RA	Read Acknowledge	Sent from memory to cache
-// IV	Invalidate		Sent from memory or cache 
-// IA	Invalidate Acknowledge	Sent from last cache in list to new head
-
-/*
-A cache receives packets from its processor and from the network
-A packet from a processor can be a read request or a write request
-The response to a read request may be
-RH - Read Hit: the cache returns the requested data to the processor
-RME - Read Miss on an Empty Line: the cache requests the data from
-      Memory
-RMV - Read Miss on a line containing a different Valid address:
-      the cache sends an invalidate request to Memory and
-      when it receives an Acknowledge, issues a read request;
-      the Acknowledge may come from Memory (if the cache was the
-      tail) or from another cache.
-The response to a write request may be
-WH - Write Hit: cache writes to itself and memory and gets either
-     a Write Acknowledgement from Memory (if it's the only cache
-     with a copy) or an Invalidate Acknowledge from another cache.
-WME - Write Miss on an Empty line: the cache requests the data fromm
-      Memory; Memory and cache update their lines.
-WMV - Write Miss on a line containing a different valid address:
-      the cache sends an invalidate request to Memory and
-      when it receives an Acknowledge, issues a write request
-*/         
-
+// R	Read		Sent from processor to cache.
+// W	Write		Sent from memory to cache
+// RR	Read Request	Sent from cache to memory.
+// RW	Read prior to Write
+// HP	Head Pointer	From memory to an old head of chain
+// 			 when a cache reads a cached block
+// RD	Requested Data	Sent from memory or the old head of the list 
+// 			to the  new head
+// PP	Pointer Prepend	Sent from new head (cache) to old head
+// PU	Purge	Sent from cache 
+// PR	Purge Reply	Sent from memory or a cache to another cache.
+// WD	Write Data	
+// 			
+// UP	Update Predecessor	
+// PA	UP�Acknowledge
+// US	Update Successor	
+// SA	US�Acknowledge
 
 $class_decls
 
 bool read_request, write_request;
 bool send_to_network, send_to_proc;
-bool awaiting_ia;
 bool done;
+bool awaiting_pp, pp_outstanding;
+bool awaiting_pa, awaiting_sa, rolling_out;
 
 char instr[5];
 
-int addr, n_data, p_data;
+int addr;
+int tag;           //tag for this address 
+int x;
 int count;
 int own_no;
+int predecessor;
 int successor;
 char * name;
 int line, current_line, line_mask;
+int write_data;
 int Cache_size;
 
 mem_trace_struct pkt_from_proc;
 net_struct pkt_to_network;
 net_struct pkt_from_network;
+net_struct pp_buffer;
 
 cache_struct cache_buff,new_block;
 
-void issue_read();
-void issue_write();
-void write_data();
-void issue_invalidate();
 void handle_read();
+void issue_read_request();
+void issue_write_request();
 void handle_write();
 void handle_from_network();
+void rollout();
+void start_purge();
+void do_write();
 
 $class_defs
 
-void cache::issue_read(){
+void cache::start_purge(){
+	
+/* Method called to start a purge.  */
 
-	strcpy(pkt_to_network.instr,"RR");
-	pkt_to_network.addr = pkt_from_proc.addr;
-	pkt_to_network.data = 0;
-	pkt_to_network.dest = 0;
+	strcpy(pkt_to_network.instr,"PU");
+	pkt_to_network.addr = addr;
+	pkt_to_network.dest = cache_buff.successor;
 	pkt_to_network.source = own_no;
-	pkt_to_network.pointer = cache_buff.successor;
+	pkt_to_network.pointer = 0;
 	send_to_network = true;
 }
 
-void cache::issue_write(){
 
-	strcpy(pkt_to_network.instr,"WR");
-	pkt_to_network.addr = pkt_from_proc.addr;
-	pkt_to_network.data = pkt_from_proc.data;
-	pkt_to_network.dest = 0;
-	pkt_to_network.source = own_no;
-	pkt_to_network.pointer = cache_buff.successor;
-	send_to_network = true;
-}
+void cache::do_write(){
 
-void cache::write_data(){
-
-	 new_block.valid = 1;
-	 new_block.address = addr;
-	 new_block.data = n_data;
-	 new_block.successor = -1;
-	 cache_mem.Update(current_line,new_block);	// write mem data
-	 new_block.data = p_data;
-	 cache_mem.Update(current_line,new_block);	// write new data
-	 send_to_proc = true;
-	 done = true;
-}
-
-void cache::issue_invalidate(){	
-
-/* Called when a cache miss is to a line containing a different valid
-address.
+/* This method is called to perform a write to memory once the cache
+has exclusive access (usually after a purge). Cache will have been
+updated by the read and as there's no data, there's no need to update
+the cache again.
  */
-	pkt_to_network.addr = cache_buff.address;
-	pkt_to_network.data = 0;
-	pkt_to_network.source = own_no;
+	strcpy(pkt_to_network.instr,"WD");
+	pkt_to_network.addr = addr;
 	pkt_to_network.dest = 0;
-	pkt_to_network.pointer = cache_buff.successor;
-	strcpy(pkt_to_network.instr,"IV");
-	awaiting_ia = true;
+	pkt_to_network.source = own_no;
+	pkt_to_network.pointer = 0;
 	send_to_network = true;
 }
 
-void cache::handle_read(){	
-/*
-Called when the cache receives a Read Request
-*/
+
+void cache::rollout(){	
+
+/* This method is called when a cache wants to remove its entry from
+the list for a particular address. This is normally done by sending:
+1. a UP packet containing its successor number to its predecessor telling
+   the predecessor to update its successor field
+2. a US packet containing its predecessor number to its successor telling
+   the successor to update its predecessor field (unless it's the tail)
+If it is the head of the list, its predecessor will be memory, which
+will update its pointer to the new head. If it is the tail of the list,
+its predecessor will become the tail.
+It is also possible for two caches to decide to roll out together.
+When UP is sent, awaiting_pa is set; when US is sent, awaiting_sa is set; 
+When a UP is received (see later), awaiting_pa is reset but if a US is
+received while awaiting_pa is set, awaiting_pa is reset and the US packet
+is forwarded to the current cache's successor << check this!
+
+ */
+
+	pkt_to_network.addr=cache_buff.address;
+
+// send successor number to predecessor
+	pkt_to_network.addr = cache_buff.address;
+	pkt_to_network.source = own_no;
+	pkt_to_network.pointer = cache_buff.successor;
+	strcpy(pkt_to_network.instr,"UP");
+	pkt_to_network.dest = cache_buff.predecessor;
+	send_to_network = true;
+}
+
+void cache::issue_read_request(){
+
+		strcpy(pkt_to_network.instr,"RR");
+		pkt_to_network.addr = pkt_from_proc.addr;
+		pkt_to_network.dest = 0;
+		pkt_to_network.source = own_no;
+		send_to_network = true;
+}
+
+void cache::issue_write_request(){
+
+		strcpy(pkt_to_network.instr,"RW");
+		pkt_to_network.addr = pkt_from_proc.addr;
+		pkt_to_network.dest = 0;
+		pkt_to_network.source = own_no;
+		send_to_network = true;
+}
+
+void cache::handle_read(){
+	
+/* This method is called when a cache receives a read request from a
+processor.  The cache first checks to see if the requested value is
+already in the cache.  If so, it simply returns this value. If the
+relevant cache line is invalid, it sends a "Read Request" (RR) message
+to memory.  If the cache block is valid but contains a different
+memory address, the cache must remove itself from the list for that
+address by executing a "roll-out". 
+ */
 	read_request = true;
-	if (cache_buff.valid == 1)		// line in use
-	 {
-	  if (cache_buff.address == addr)
+	if ((cache_buff.address==addr) && (cache_buff.valid==1))
 		{				// read hit
+		 send_to_proc = true;
 		 strcpy(Status, "RH");
 		 dump_state();
-	 	 pkt_from_proc.data = cache_buff.data;
-		 send_to_proc = true;
 		 done = true;
 		}
-	  else					// read miss
-		{
-		 strcpy(Status, "RMV");
-		 dump_state();
-		 issue_invalidate();
-		 }
-	 }
-	else					// line empty
-	  {
-		 strcpy(Status, "RME");
-	   	 dump_state();
-	   	 issue_read();
-	   }
+	 else {					// read miss
+		strcpy(Status, "RM");
+		dump_state();
+		if (cache_buff.valid==1)	// line in use
+		 {rollout();}
+		else {issue_read_request();}	// line empty
+	       }
 }
 
 void cache::handle_write(){
 
 /* 
-Called when the cache receives a Write Request
+If the cache has an entry for the requested address, then
+ a) if it is the head of the list (WHH), it can write immediately
+    if it is the head but not the tail, it can write immediately
+     but must then purge the remainder of the list
+ b) if is not the head of the list (WHM), it must roll out of the list,
+    become the head of the list and then proceed as at a)
+If it does not have an entry for the requested address, and the line is
+    empty (WME), it issues a read request for that line and then proceeds
+    as at a)
+If it does not have an entry for the requested address, and the line is
+    not empty (WMN), it must roll out, become the head of the list and
+    then proceed as at a)
  */
 	write_request = true;
-	if (cache_buff.valid == 1)		// line in use
-	 {
-	  if (cache_buff.address == addr)	// write hit
-		{
-		 strcpy(Status, "WH");
-		 dump_state();
-		 issue_write();
-		}
- 	  else					// write miss
-		  {
-		   strcpy(Status, "WMV");
-		   dump_state();
-		   issue_invalidate();
-		  }
-	 }
-	else					// line empty
+	if ((cache_buff.address == addr) && (cache_buff.valid == 1))
+	  {					// write hit
+	   if (cache_buff.predecessor == 0)
+					    	// head of list 
+	    {
+	     new_block.valid = 1;
+	     new_block.modified = 1;
+	     new_block.address = cache_buff.address;
+	     new_block.predecessor = cache_buff.predecessor;
+	     new_block.successor = cache_buff.successor;
+	     cache_mem.Update(line,new_block);
+	     strcpy(Status, "WHH");
+             dump_state();
+	     send_to_proc = true;
+	     done = true;
+	     if (cache_buff.successor != -1)	// head but not tail of list
+	       {start_purge();}
+	    }
+	   else   		// cache is not head, needs to become it.
+	    {strcpy(Status, "WHN");
+	     dump_state();
+	     rollout();}
+	  }	// valid entry
+	else	// write miss
 	  {
+	   if (cache_buff.valid == 0)	// empty line
+		{
 		 strcpy(Status, "WME");
-	   	 dump_state();
-	   	 issue_write();
+	         dump_state();
+		 issue_read_request();
+		}
+	   else				// line in use
+		{
+		 strcpy(Status, "WMN");
+	         dump_state();
+		 rollout();
+		}
 	   }
 }
 
@@ -196,112 +242,300 @@ void cache::handle_from_network(){
 /* This method is called when a packet arrives from the network.
    Different actions occur according to the instr field in the packet.
 
-RA: Read Acknowledge
+HP: Head of list Packet from memory
 
-WA: Write Acknowledge
+RD: Read Data packet from memory or another cache in response to a read
+    or write request
 
-IV: Invalidate
+PP: When a PP packet is received, the cache sends the requested
+    data to the requesting processor (orig_proc), and updates its
+    successor pointer to point to the requesting processor.
 
-IA: Invalidate Acknowledge
+PR: Purge Reply; contains next successor in pointer field
+
+PU: Upon receiving a PURGE message, the cache must invalidate (purge) the
+    given address and return its successor pointer for that address,
+    so that the writer can then purge the successor.
+
+UP: Update predecessor's successor field
+
+US: Update successor's predecesor field
+
  */
 
-/* RA: 
-When an RA packet is received, the data is written to the cache
+/*  HP:
+When an HP packet is received, the cache needs to send a prepend
+request to the cache contained in the "orig_proc" field of the
+incoming signal, as this corresponds to the head of the list.
+*/
+	if ( strcmp(instr,"HP") == 0 ) {
+	   if (pkt_from_network.pointer != own_no)
+	       {
+		strcpy(pkt_to_network.instr,"PP");
+		pkt_to_network.addr = pkt_from_network.addr;
+		pkt_to_network.dest = pkt_from_network.pointer;
+		pkt_to_network.source = own_no;
+		pkt_to_network.pointer = 0;
+		send_to_network = true;
+		awaiting_pp = true;
+	       }
+	}	// end of HP
+/* RD: 
+
+When an RD packet is received, the data is written to the cache
 and, in the case of a read request, forwarded to the processor.
 
-If the pointer field is = 0, the cache becomes the tail of the list
-If the pointer field is != 0, the cache prepends itself to the
-list by copying the pointer field into its successor field.
+If the packet is from memory, the cache is the head and tail of the list.
+    For a read request, data is sent to the processor
+    For a write request, the line is updated and an ack sent to the processor
+
+If the packet is from another cache, that cache becomes this cache's
+successor.
+    For a read request, data is sent to the processor
+    For a write request, the line is updated, an ack is sent to the
+    processor and the list is purged.
+If there's an outstanding PP request from another cache (there because it
+arrived while this cache itself had an outstanding PP request), deal with
+it now.
 */
-   if (strcmp(instr,"RA") == 0)
+	if ( strcmp(instr,"RD")==0)
 	 {
 	  cache_buff.address = addr;
-	  cache_buff.data = n_data;
 	  cache_buff.valid = 1;
+	  cache_buff.predecessor = 0;	// Head of list
+	  if (pkt_from_network.source==0)	// packet from memory
+	    {  
+	     cache_buff.successor = -1;   // Tail of list	
 
-	  if (pkt_from_network.pointer == 0)	// Tail of list	
-	    {cache_buff.successor = -1;}
-	  else					// Prepend to list
-	    {cache_buff.successor = pkt_from_network.pointer;}
-
-	 cache_mem.Update(current_line,cache_buff);
-	 read_request = false;
-	 pkt_from_proc.data = n_data;
-	 send_to_proc = true;
-	 done = true;
+	     if (read_request)
+	       {
+		cache_buff.modified = 0;
+		cache_mem.Update(current_line,cache_buff);
+	        read_request = false;
+		send_to_proc = true;
+	       }
+	     else 	// write_request, can write immediately
+	       {
+		cache_buff.modified = 1;
+	        write_request = false;
+	        cache_mem.Update(current_line,cache_buff);
+		send_to_proc = true;
+	       }
+	     done = true;
+	    }
+	   else				// packet from another cache
+	   {
+	     cache_buff.successor= pkt_from_network.source;
+             cache_mem.Update(current_line,cache_buff);
+	     awaiting_pp = false;
+	     if (read_request)
+	       {
+		send_to_proc = true;
+		read_request = false;
+		done = true;
+	       }
+             else	// write_request, must purge list
+	       {
+		cache_buff.modified = 1;
+	        cache_mem.Update(current_line,cache_buff);
+	        start_purge();
+	       }
+	     if (pp_outstanding)	// deal with outstanding PP request
+	       {
+		new_block.valid = 1;
+		new_block.modified = 0;
+		new_block.address = cache_buff.address;
+		new_block.predecessor = pp_buffer.source;
+		new_block.successor = cache_buff.successor;
+		cache_mem.Update(line,new_block);
+		strcpy(pkt_to_network.instr,"RD");
+		pkt_to_network.addr = pp_buffer.addr;
+		pkt_to_network.dest = pp_buffer.source;
+		pkt_to_network.source = own_no;
+		pp_outstanding = false;
+		send_to_network = true;
+	       }
+	    }
 	}	// end of RD
 
-/* IV:
-Copy data in input packet to output
-If successor field != -1, send an IV packet to the cache identified
-in own successor field
-If successor field = -1, send an IA packet to the cache identified
-in the pointer field.
-Clear line in cache containing address in the packet.
-*/
-	if (strcmp(instr,"IV") == 0) {
-	pkt_to_network.addr = pkt_from_network.addr;
-	line = pkt_from_network.addr & line_mask;	
-	pkt_to_network.data = n_data;
-	pkt_to_network.source = own_no;
-	if (cache_buff.successor != -1)
+
+	if (strcmp(instr,"PP")==0)
 	 {
-	  strcpy(pkt_to_network.instr,"IV");
-	  pkt_to_network.dest = cache_buff.successor;
-	  pkt_to_network.pointer = pkt_from_network.pointer;
+	  if (!awaiting_pp)	// update pointers and reply
+	   {
+		new_block.valid = 1;
+		new_block.modified = 0;
+		new_block.address = cache_buff.address;
+		new_block.predecessor = pkt_from_network.source;
+		new_block.successor = cache_buff.successor;
+		cache_mem.Update(line,new_block);
+		strcpy(pkt_to_network.instr,"RD");
+		pkt_to_network.addr = pkt_from_network.addr;
+		pkt_to_network.dest = pkt_from_network.source;
+		pkt_to_network.source = own_no;
+		send_to_network = true;
+	   }
+	  else			// store packet till own PP is complete
+	   {
+		pp_buffer.source = pkt_from_network.source;
+		pp_buffer.addr = pkt_from_network.addr;
+		pp_outstanding = true;
+	   }
 	 }
-	else
-	 {
-	  strcpy(pkt_to_network.instr,"IA");
-	  pkt_to_network.dest = pkt_from_network.pointer;
-	  pkt_to_network.pointer = 0;
-	 }
-	new_block.valid = 0;
-	new_block.address= 0;
-	new_block.data = 0;
-	new_block.successor= 0;
-	cache_mem.Update(line,new_block);
-	send_to_network = true;
+
+	if (strcmp(instr,"PU")==0) {
+// send reply to source, with own successor in pointer field
+// and clear line in cache
+		line = pkt_from_network.addr & line_mask;	
+		strcpy(pkt_to_network.instr,"PR");
+		pkt_to_network.dest = pkt_from_network.source;
+		pkt_to_network.source = own_no;
+		pkt_to_network.pointer = cache_buff.successor; 
+
+		new_block.valid = 0;
+		new_block.modified = 0;
+		new_block.address= 0;
+		new_block.predecessor= 0;
+		new_block.successor= 0;
+		cache_mem.Update(line,new_block);
+		send_to_network = true;
 	}
 
-/* IA:
-An IA packet arrives in response to an IV or a WR packet sent to Memory,
-either in response to a Write Request or to an Invalidate Request (sent
-because of a conflict miss)
-If a Write Request is outstanding, the write can now complete.
-If an Invalidate request is outstanding, the read or write
-request can now be issued.
+	
+/* PR:
+Check if the pointer it contains is -1 (tail).  If so, whole list has
+been purged, and we can now perform our write. Otherwise, we must
+continue purging.
  */
-   if ( strcmp(instr,"IA") == 0) {
-	if (awaiting_ia)
+	
+	if ( strcmp(instr,"PR") == 0) {
+		if (pkt_from_network.pointer == -1) {
+// last purge was tail; can send acknowledge to processor and update cache
+// and memory
+
+			new_block.valid = 1;
+			new_block.modified = 1;
+			new_block.address= cache_buff.address;
+			new_block.predecessor= 0;
+			new_block.successor= -1;
+			cache_mem.Update(line,new_block);
+			send_to_proc = true;
+			write_request = false;
+			done = true;
+		    } 
+		else {	// continue purge
+			strcpy(pkt_to_network.instr,"PU");
+			pkt_to_network.addr = pkt_from_network.addr;
+			pkt_to_network.dest = pkt_from_network.pointer;
+			pkt_to_network.source = own_no;
+			pkt_to_network.pointer = 0;
+			send_to_network = true;
+		 }
+		}
+
+/* UP: Update Predecessor's Successor field - received from successor.
+       Says that this cache's successor is now its successor's successor.
+       Need to send a SA (US Acknowledge) unless this cache has sent
+       a UP packet to its succcessor.
+ */
+	if ( strcmp(instr,"UP")==0) {
+		line = pkt_from_network.addr & line_mask;
+		new_block.valid = 1;
+		new_block.address=cache_buff.address;
+		new_block.predecessor=cache_buff.predecessor;
+		new_block.successor=pkt_from_network.pointer;
+		cache_mem.Update(line,new_block);
+
+		pkt_to_network.pointer=0;
+		pkt_to_network.dest=pkt_from_network.source;
+		pkt_to_network.source=own_no;
+		pkt_to_network.addr=pkt_from_network.addr;
+		strcpy(pkt_to_network.instr,"PA");
+		send_to_network = true;
+		}
+
+/*	PA: UP Acknowledge.
+	If SA has been received, clear cache line and send read request
+ */
+  if ( strcmp(instr,"PA")==0)
+   {
+// send predecessor number to successor (but not if this cache is the tail)
+
+	if (cache_buff.successor != -1)	
 	 {
-	  issue_write();
-	  awaiting_ia = false;
+	  pkt_to_network.addr = cache_buff.address;
+	  pkt_to_network.source = own_no;
+	  pkt_to_network.pointer = cache_buff.predecessor;
+	  strcpy(pkt_to_network.instr,"US");
+	  pkt_to_network.dest = cache_buff.successor;
+	  send_to_network = true;
 	 }
 	else
-	 {write_data();} 
-}
+	 {
+	  new_block.valid = 0;
+	  new_block.address = 0;
+	  new_block.predecessor = 0;
+	  new_block.successor = 0;
+	  cache_mem.Update(current_line,new_block);
+	  issue_read_request();
+	 }
+   }
 
-/* WA:
-Reply from Memory in response to Write Request when cache is tail of list
-Update the cache and send an ack to the processor
+/* 
+US: Update Successor's Predecessor field - received from predecessor.
+    Says that this cache's predecessor is now its predecessor's predecessor.
+    Need to send an SA (US Acknowledge) unless this cache has sent a UP packet
+    to its predecessor.
 */
-        if (strcmp(instr,"WA")==0) {
-		write_data();
-		write_request = false;
+  if ( strcmp(instr,"US")==0)
+   {
+	line = pkt_from_network.addr & line_mask;
+	new_block.valid = 1;
+	new_block.address = cache_buff.address;
+	new_block.predecessor = pkt_from_network.pointer;
+	new_block.successor = cache_buff.successor;
+	cache_mem.Update(line,new_block);
+
+	strcpy(pkt_to_network.instr,"SA");
+	pkt_to_network.addr = pkt_from_network.addr;
+	pkt_to_network.dest = pkt_from_network.source;
+	pkt_to_network.source = own_no;
+	pkt_to_network.pointer=0;
+	send_to_network = true;
+   }
+
+/*	SA: US Acknowledge. If PA has been received, send read request
+*/
+  if ( strcmp(instr,"SA")==0)
+   {
+    	// update cache entry 
+      new_block.valid = 0;
+      new_block.address = 0;
+      new_block.predecessor = 0;
+      new_block.successor = 0;
+      cache_mem.Update(current_line,new_block);
+      issue_read_request();
+   }
+
+        if (strcmp(instr,"AK")==0) {	// send write ack to processor
 		send_to_proc = true;
-		done = true;
+		write_request = false;
         }
+
 }
 
 $pre
 
   done = false;
-  awaiting_ia = false;
   read_request = false;
   write_request = false;
   send_to_network = false;
   send_to_proc = false;
+
+  awaiting_pp = false;
+  pp_outstanding = false;
+  awaiting_pa = false;
+  awaiting_sa = false;
 
   Cache_size = 1 << cache_size;
   line_mask = (1 << cache_size) -1;
@@ -315,8 +549,8 @@ $pre
 /*The following lines reset the values for the animation*/
 
   new_block.valid = 0;
-  new_block.data= 0;
   new_block.address= 0;
+  new_block.predecessor= 0;
   new_block.successor= 0;
   for (count=0;count<Cache_size;count++)
     {cache_mem.Update(count,new_block);}
@@ -340,7 +574,6 @@ $phase0
     SIM_CAST(mem_trace_struct, pkt_from_proc,ev);
     strcpy(instr,pkt_from_proc.instr);
     addr = pkt_from_proc.addr;
-    p_data = pkt_from_proc.data;
     current_line = addr & line_mask;
     cache_buff = cache_mem[current_line];
     if  (strcmp(instr,"R") == 0)
@@ -358,7 +591,6 @@ $phase0
     SIM_CAST(net_struct, pkt_from_network, ev);
     strcpy(instr,pkt_from_network.instr);
     addr=pkt_from_network.addr;
-    n_data=pkt_from_network.data;
     current_line = addr & line_mask;
     cache_buff = cache_mem[current_line];
     handle_from_network();
@@ -378,7 +610,7 @@ $phase1
    }
   if (done)
    {
-    nodes_done_mutex.Lock();
+     nodes_done_mutex.Lock();
     nodes_done++;
     dump_globals();
     nodes_done_mutex.Unlock();

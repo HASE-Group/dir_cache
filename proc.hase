@@ -61,7 +61,7 @@ $phase0
      {
 	strcpy(pkt_to_cache.instr,current_line.instr);
 	pkt_to_cache.addr = current_line.addr;
-	pkt_to_cache.data = current_line.data;
+//	pkt_to_cache.data = current_line.data;	dll model has no data
 	waiting = true;
 	send_pkt = true;
      }

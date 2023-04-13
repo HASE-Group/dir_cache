@@ -1,8 +1,8 @@
 //
-// Project:	Directory-based Coherence: singly-linked list
+// Project:	Scalable Coherent Interface
 // Entity	Network
 // File		network.hase
-// Date:	Jun 2006
+// Date:	Aug 2005
 // Author:	Roland Ibbett, based on an earlier version by Max Magliana
 
 $class_decls
@@ -35,7 +35,6 @@ void network::add_to_Mqueue(){
 	   {
 		strcpy(Mqueue[3].instr,pkt_in.instr);
 		Mqueue[3].addr = pkt_in.addr;
-		Mqueue[3].data = pkt_in.data;
 		Mqueue[3].dest = pkt_in.dest;
 		Mqueue[3].source = pkt_in.source;
 		Mqueue[3].pointer = pkt_in.pointer;
@@ -45,7 +44,6 @@ void network::add_to_Mqueue(){
 	   {
 		strcpy(Mqueue[2].instr,pkt_in.instr);
 		Mqueue[2].addr = pkt_in.addr;
-		Mqueue[2].data = pkt_in.data;
 		Mqueue[2].dest = pkt_in.dest;
 		Mqueue[2].source = pkt_in.source;
 		Mqueue[2].pointer = pkt_in.pointer;
@@ -56,7 +54,6 @@ void network::add_to_Mqueue(){
 	   {
 		strcpy(Mqueue[1].instr,pkt_in.instr);
 		Mqueue[1].addr = pkt_in.addr;
-		Mqueue[1].data = pkt_in.data;
 		Mqueue[1].dest = pkt_in.dest;
 		Mqueue[1].source = pkt_in.source;
 		Mqueue[1].pointer = pkt_in.pointer;
@@ -67,7 +64,6 @@ void network::add_to_Mqueue(){
 	   {
 		strcpy(Mqueue[0].instr,pkt_in.instr);
 		Mqueue[0].addr = pkt_in.addr;
-		Mqueue[0].data = pkt_in.data;
 		Mqueue[0].dest = pkt_in.dest;
 		Mqueue[0].source = pkt_in.source;
 		Mqueue[0].pointer = pkt_in.pointer;
@@ -83,7 +79,6 @@ void network::add_to_Cqueue(){
 	   {
 		strcpy(C1queue[3].instr,pkt_in.instr);
 		C1queue[3].addr = pkt_in.addr;
-		C1queue[3].data = pkt_in.data;
 		C1queue[3].dest = pkt_in.dest;
 		C1queue[3].source = pkt_in.source;
 		C1queue[3].pointer = pkt_in.pointer;
@@ -93,7 +88,6 @@ void network::add_to_Cqueue(){
 	   {
 		strcpy(C1queue[2].instr,pkt_in.instr);
 		C1queue[2].addr = pkt_in.addr;
-		C1queue[2].data = pkt_in.data;
 		C1queue[2].dest = pkt_in.dest;
 		C1queue[2].source = pkt_in.source;
 		C1queue[2].pointer = pkt_in.pointer;
@@ -104,7 +98,6 @@ void network::add_to_Cqueue(){
 	   {
 		strcpy(C1queue[1].instr,pkt_in.instr);
 		C1queue[1].addr = pkt_in.addr;
-		C1queue[1].data = pkt_in.data;
 		C1queue[1].dest = pkt_in.dest;
 		C1queue[1].source = pkt_in.source;
 		C1queue[1].pointer = pkt_in.pointer;
@@ -115,7 +108,6 @@ void network::add_to_Cqueue(){
 	   {
 		strcpy(C1queue[0].instr,pkt_in.instr);
 		C1queue[0].addr = pkt_in.addr;
-		C1queue[0].data = pkt_in.data;
 		C1queue[0].dest = pkt_in.dest;
 		C1queue[0].source = pkt_in.source;
 		C1queue[0].pointer = pkt_in.pointer;
@@ -129,7 +121,6 @@ void network::add_to_Cqueue(){
 	   {
 		strcpy(C2queue[3].instr,pkt_in.instr);
 		C2queue[3].addr = pkt_in.addr;
-		C2queue[3].data = pkt_in.data;
 		C2queue[3].dest = pkt_in.dest;
 		C2queue[3].source = pkt_in.source;
 		C2queue[3].pointer = pkt_in.pointer;
@@ -139,7 +130,6 @@ void network::add_to_Cqueue(){
 	   {
 		strcpy(C2queue[2].instr,pkt_in.instr);
 		C2queue[2].addr = pkt_in.addr;
-		C2queue[2].data = pkt_in.data;
 		C2queue[2].dest = pkt_in.dest;
 		C2queue[2].source = pkt_in.source;
 		C2queue[2].pointer = pkt_in.pointer;
@@ -150,7 +140,6 @@ void network::add_to_Cqueue(){
 	   {
 		strcpy(C2queue[1].instr,pkt_in.instr);
 		C2queue[1].addr = pkt_in.addr;
-		C2queue[1].data = pkt_in.data;
 		C2queue[1].dest = pkt_in.dest;
 		C2queue[1].source = pkt_in.source;
 		C2queue[1].pointer = pkt_in.pointer;
@@ -161,7 +150,6 @@ void network::add_to_Cqueue(){
 	   {
 		strcpy(C2queue[0].instr,pkt_in.instr);
 		C2queue[0].addr = pkt_in.addr;
-		C2queue[0].data = pkt_in.data;
 		C2queue[0].dest = pkt_in.dest;
 		C2queue[0].source = pkt_in.source;
 		C2queue[0].pointer = pkt_in.pointer;
@@ -175,7 +163,6 @@ void network::add_to_Cqueue(){
 	   {
 		strcpy(C3queue[3].instr,pkt_in.instr);
 		C3queue[3].addr = pkt_in.addr;
-		C3queue[3].data = pkt_in.data;
 		C3queue[3].dest = pkt_in.dest;
 		C3queue[3].source = pkt_in.source;
 		C3queue[3].pointer = pkt_in.pointer;
@@ -185,7 +172,6 @@ void network::add_to_Cqueue(){
 	   {
 		strcpy(C3queue[2].instr,pkt_in.instr);
 		C3queue[2].addr = pkt_in.addr;
-		C3queue[2].data = pkt_in.data;
 		C3queue[2].dest = pkt_in.dest;
 		C3queue[2].source = pkt_in.source;
 		C3queue[2].pointer = pkt_in.pointer;
@@ -196,7 +182,6 @@ void network::add_to_Cqueue(){
 	   {
 		strcpy(C3queue[1].instr,pkt_in.instr);
 		C3queue[1].addr = pkt_in.addr;
-		C3queue[1].data = pkt_in.data;
 		C3queue[1].dest = pkt_in.dest;
 		C3queue[1].source = pkt_in.source;
 		C3queue[1].pointer = pkt_in.pointer;
@@ -207,7 +192,6 @@ void network::add_to_Cqueue(){
 	   {
 		strcpy(C3queue[0].instr,pkt_in.instr);
 		C3queue[0].addr = pkt_in.addr;
-		C3queue[0].data = pkt_in.data;
 		C3queue[0].dest = pkt_in.dest;
 		C3queue[0].source = pkt_in.source;
 		C3queue[0].pointer = pkt_in.pointer;
@@ -221,7 +205,6 @@ void network::add_to_Cqueue(){
 	   {
 		strcpy(C4queue[3].instr,pkt_in.instr);
 		C4queue[3].addr = pkt_in.addr;
-		C4queue[3].data = pkt_in.data;
 		C4queue[3].dest = pkt_in.dest;
 		C4queue[3].source = pkt_in.source;
 		C4queue[3].pointer = pkt_in.pointer;
@@ -231,7 +214,6 @@ void network::add_to_Cqueue(){
 	   {
 		strcpy(C4queue[2].instr,pkt_in.instr);
 		C4queue[2].addr = pkt_in.addr;
-		C4queue[2].data = pkt_in.data;
 		C4queue[2].dest = pkt_in.dest;
 		C4queue[2].source = pkt_in.source;
 		C4queue[2].pointer = pkt_in.pointer;
@@ -242,7 +224,6 @@ void network::add_to_Cqueue(){
 	   {
 		strcpy(C4queue[1].instr,pkt_in.instr);
 		C4queue[1].addr = pkt_in.addr;
-		C4queue[1].data = pkt_in.data;
 		C4queue[1].dest = pkt_in.dest;
 		C4queue[1].source = pkt_in.source;
 		C4queue[1].pointer = pkt_in.pointer;
@@ -253,7 +234,6 @@ void network::add_to_Cqueue(){
 	   {
 		strcpy(C4queue[0].instr,pkt_in.instr);
 		C4queue[0].addr = pkt_in.addr;
-		C4queue[0].data = pkt_in.data;
 		C4queue[0].dest = pkt_in.dest;
 		C4queue[0].source = pkt_in.source;
 		C4queue[0].pointer = pkt_in.pointer;
@@ -283,9 +263,6 @@ cache4_busy = false;
 		}
 
 $phase0
-
-// clock_cycle = myClock->cycle / 2;				//
-// printf("Clock cycle %d Phase 0\n", clock_cycle);		// useful for debugging
 
   sim_from_port M_Input(from_mem);	    
   sim_from_port C1_Input(from_cache1);
@@ -348,7 +325,6 @@ $phase1
    {
     strcpy(pkt_to_mem.instr,Mqueue[3].instr);
     pkt_to_mem.addr = Mqueue[3].addr;
-    pkt_to_mem.data = Mqueue[3].data;
     pkt_to_mem.dest = Mqueue[3].dest;
     pkt_to_mem.source = Mqueue[3].source;
     pkt_to_mem.pointer = Mqueue[3].pointer;
@@ -365,7 +341,6 @@ $phase1
 	   {
 	    strcpy(Mqueue[i].instr, Mqueue[i-1].instr);
 	    Mqueue[i].addr = Mqueue[i-1].addr;
-	    Mqueue[i].data = Mqueue[i-1].data;
 	    Mqueue[i].dest = Mqueue[i-1].dest;
 	    Mqueue[i].source = Mqueue[i-1].source;
 	    Mqueue[i].pointer = Mqueue[i-1].pointer;
@@ -385,7 +360,6 @@ $phase1
 	   {
 	    strcpy(pkt_to_cache1.instr,C1queue[3].instr);
 	    pkt_to_cache1.addr = C1queue[3].addr;
-	    pkt_to_cache1.data = C1queue[3].data;
 	    pkt_to_cache1.dest = C1queue[3].dest;
 	    pkt_to_cache1.source = C1queue[3].source;
 	    pkt_to_cache1.pointer = C1queue[3].pointer;
@@ -396,7 +370,6 @@ $phase1
 	   {
 	    strcpy(C1queue[i].instr, C1queue[i-1].instr);
 	    C1queue[i].addr = C1queue[i-1].addr;
-	    C1queue[i].data = C1queue[i-1].data;
 	    C1queue[i].dest = C1queue[i-1].dest;
 	    C1queue[i].source = C1queue[i-1].source;
 	    C1queue[i].pointer = C1queue[i-1].pointer;
@@ -414,7 +387,6 @@ $phase1
 	   {
 	    strcpy(pkt_to_cache2.instr,C2queue[3].instr);
 	    pkt_to_cache2.addr = C2queue[3].addr;
-	    pkt_to_cache2.data = C2queue[3].data;
 	    pkt_to_cache2.dest = C2queue[3].dest;
 	    pkt_to_cache2.source = C2queue[3].source;
 	    pkt_to_cache2.pointer = C2queue[3].pointer;
@@ -425,7 +397,6 @@ $phase1
 	   {
 	    strcpy(C2queue[i].instr, C2queue[i-1].instr);
 	    C2queue[i].addr = C2queue[i-1].addr;
-	    C2queue[i].data = C2queue[i-1].data;
 	    C2queue[i].dest = C2queue[i-1].dest;
 	    C2queue[i].source = C2queue[i-1].source;
 	    C2queue[i].pointer = C2queue[i-1].pointer;
@@ -443,7 +414,6 @@ $phase1
 	   {
 	    strcpy(pkt_to_cache3.instr,C3queue[3].instr);
 	    pkt_to_cache3.addr = C3queue[3].addr;
-	    pkt_to_cache3.data = C3queue[3].data;
 	    pkt_to_cache3.dest = C3queue[3].dest;
 	    pkt_to_cache3.source = C3queue[3].source;
 	    pkt_to_cache3.pointer = C3queue[3].pointer;
@@ -454,7 +424,6 @@ $phase1
 	   {
 	    strcpy(C3queue[i].instr, C3queue[i-1].instr);
 	    C3queue[i].addr = C3queue[i-1].addr;
-	    C3queue[i].data = C3queue[i-1].data;
 	    C3queue[i].dest = C3queue[i-1].dest;
 	    C3queue[i].source = C3queue[i-1].source;
 	    C3queue[i].pointer = C3queue[i-1].pointer;
@@ -472,7 +441,6 @@ $phase1
 	   {
 	    strcpy(pkt_to_cache4.instr,C4queue[3].instr);
 	    pkt_to_cache4.addr = C4queue[3].addr;
-	    pkt_to_cache4.data = C4queue[3].data;
 	    pkt_to_cache4.dest = C4queue[3].dest;
 	    pkt_to_cache4.source = C4queue[3].source;
 	    pkt_to_cache4.pointer = C4queue[3].pointer;
@@ -483,7 +451,6 @@ $phase1
 	   {
 	    strcpy(C4queue[i].instr, C4queue[i-1].instr);
 	    C4queue[i].addr = C4queue[i-1].addr;
-	    C4queue[i].data = C4queue[i-1].data;
 	    C4queue[i].dest = C4queue[i-1].dest;
 	    C4queue[i].source = C4queue[i-1].source;
 	    C4queue[i].pointer = C4queue[i-1].pointer;
@@ -509,7 +476,6 @@ if (done)
 
  if (time_out)
    {printf("Simulation timed out -> increase Max_Time_Left \n");}
-
 
 
 
