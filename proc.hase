@@ -1,8 +1,7 @@
-// Project			Coherence Models
-// Entity			Processor
-// File			proc.hase
-// Date created:	Aug 2005
-// Last revision		May 2016
+// Project	Coherence Models
+// Entity	Processor
+// File		proc.hase
+// Date:	Aug 2005, revised Sept 2006
 // Author:	Roland Ibbett
 
 $class_decls
@@ -73,10 +72,10 @@ $phase0
 	  my_state = PROC_IDLE;
 	  dump_state();
 	  finished = true;
-	 nodes_done_mutex.Lock();
-	 nodes_done++;
-	 dump_globals();
-	 nodes_done_mutex.Unlock();
+	  nodes_done_mutex.Lock();
+	  nodes_done++;
+	  dump_globals();
+	  nodes_done_mutex.Unlock();
 	 }
      }
    }

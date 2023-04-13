@@ -1,23 +1,24 @@
 //
-// Project:	Directory-based Coherence: central directory
+// Project:	Directory-based Coherence: singly-linked list
 // Entity	Memory
 // File		memory.hase
-// Date:	July 2006
+// Date:	Jun 2006
 // Author:	Roland Ibbett
 
 // The Memory receives Read and Write requests from the caches.
 // Each line in the Memory contains a data field and a directory
-// entry for each cache. In principle, memory and cache lines could be
+// field, the latter containing a pointer to the first cache in the list
+// for that memory line. In principle, memory and cache lines could be
 // longer than just one word.
 
 $class_decls
 
-bool send_to_network, pkt_sent;
-bool update, update1, update2, update3, update4;
+bool send_to_network;
 net_struct pkt_from_network;
 net_struct pkt_to_network;
-int addr, data_in;
-int source, dest;
+int head, addr, data_in, data_out;
+int source, dest, pointer;
+int count, i, counter;
 char instr[5];
 mem_struct mem_buff;
 
@@ -25,135 +26,100 @@ mem_struct mem_buff;
 void handle_read();
 void handle_write();
 void handle_invalidate();
+void progress_queue(int j);
 
 $class_defs
 
 void memory::handle_read(){
 
-/* The Memory returns an RA packet to the requesting cache containing
-the data and sets its directory entry for that cache (to 1).
+/*
+The Memory returns an RD packet to the requesting cache containing the
+current directory entry for the requested line in the pointer field
+and updates its directory entry to be equal to the value in the source
+field in the incoming packet.
+If the directory entry is 0, the requesting cache becomes the tail of
+the list.
+If the directory entry is not 0, the requesting cache prepends itself
+to the cache indentified in the pointer field. 
 */
         pkt_to_network.addr = addr;
         pkt_to_network.data = data_mem[addr].data;
 	pkt_to_network.dest = source;
 	pkt_to_network.source = 0;
+	pkt_to_network.pointer = data_mem[addr].head;
 	strcpy(pkt_to_network.instr,"RA");
-	send_to_network = true;
-
 	mem_buff.data = data_mem[addr].data;
-	mem_buff.entry1 = data_mem[addr].entry1;
-	mem_buff.entry2 = data_mem[addr].entry2;
-	mem_buff.entry3 = data_mem[addr].entry3;
-	mem_buff.entry4 = data_mem[addr].entry4;
-	if (source == 1)
-	 {mem_buff.entry1 = 1;}
-	else if (source == 2)
-	 {mem_buff.entry2 = 1;}
-	else if (source == 3)
-	 {mem_buff.entry3 = 1;}
-	else if (source == 4)
-	 {mem_buff.entry4 = 1;}
+	mem_buff.head = source;
+
 	data_mem.Update(addr,mem_buff);
+	send_to_network = true;
 }
 
 void memory::handle_write(){
 
-/* The actions that occur here are independent of the Cache Policy;
-different actions occur, according to the policy, in phase1.
+/* If the source number is equal to the directory entry and the
+pointer field value is -1, or the directory entry is 0, the Memory
+just sends a Write Acknowledge, with its current data (because in
+principle, lines could contain more than one word).  If neither of
+these, the Memory sends an IV packet to the cache identified by the
+current directory entry (along with the data and with the source
+number in the pointer field) and sets the directory entry equal to the
+source number. 
 */
-	mem_buff.entry1 = data_mem[addr].entry1;
-	mem_buff.entry2 = data_mem[addr].entry2;
-	mem_buff.entry3 = data_mem[addr].entry3;
-	mem_buff.entry4 = data_mem[addr].entry4;
-
-	mem_buff.data   = data_mem[addr].data;	// allows for multi-word
-	mem_buff.data   = data_in;		// cache blocks
-        pkt_to_network.addr = addr;
+	pkt_to_network.addr = addr;
+	pkt_to_network.data = data_mem[addr].data;
 	pkt_to_network.source = 0;
 
-	  if (source == 1)
-	   {
-	    mem_buff.entry1 = 1;
-	    if (mem_buff.entry2 == 1)
-	       {update2 = true;}
-	    if (mem_buff.entry3 == 1)
-	       {update3 = true;}
-	    if (mem_buff.entry4 == 1)
-	       {update4 = true;}
-	   }
-	  else if (source == 2)
-	   {
-	    mem_buff.entry2 = 1;
-	    if (mem_buff.entry1 == 1)
-	       {update1 = true;}
-	    if (mem_buff.entry3 == 1)
-	       {update3 = true;}
-	    if (mem_buff.entry4 == 1)
-	       {update4 = true;}
-	   }
-	  else if (source == 3)
-	   {
-	    mem_buff.entry3 = 1;
-	    if (mem_buff.entry1 == 1)
-	       {update1 = true;}
-	    if (mem_buff.entry2 == 1)
-	       {update2 = true;}
-	    if (mem_buff.entry4 ==  1)
-	       {update4 = true;}
-	   }
-	  else if (source == 4)
-	   {
-	    mem_buff.entry4 = 1;
-	    if (mem_buff.entry1 == 1)
-	       {update1 = true;}
-	    if (mem_buff.entry2 == 1)
-	       {update2 = true;}
-	    if (mem_buff.entry3 == 1)
-	       {update3 = true;}
-	   }
-	  data_mem.Update(addr,mem_buff);
-	  update = true;
+   if ( ((data_mem[addr].head == source) && (pointer == -1))
+	 || (data_mem[addr].head == 0) )
+     {
+	pkt_to_network.dest = source;
+	pkt_to_network.pointer = -1;
+        strcpy(pkt_to_network.instr,"WA");
+     }
+   else
+     {
+	pkt_to_network.dest = data_mem[addr].head;
+	pkt_to_network.pointer = source;
+	strcpy(pkt_to_network.instr,"IV");
+     }
+	mem_buff.data = data_in;
+	mem_buff.head = source;
+	data_mem.Update(addr,mem_buff);
+	send_to_network = true;
 }
 
 void memory::handle_invalidate(){
 
 /* A cache has experienced a collision miss, i.e. it needs to use a
 line for a different address from the one in the line required by a
-new request. The Memory sets its directory entry for that cache to 0
-and sends an Invalidate Acknowledge packet back to the requesting
-cache.
+new request. The Memory sends an Invalidate request to the cache
+indentified for the old address in its directory and sets its
+directory entry for that address to 0. The requesting cache will
+eventually receive an IA from the tail of the list (or from the Memory
+if the sending cache is the tail) and will then issue a write request
+for the new addresss. 
 */
-	mem_buff.data   = data_mem[addr].data;
-	mem_buff.entry1 = data_mem[addr].entry1;
-	mem_buff.entry2 = data_mem[addr].entry2;
-	mem_buff.entry3 = data_mem[addr].entry3;
-	mem_buff.entry4 = data_mem[addr].entry4;
-	if (source == 1)
-	 {mem_buff.entry1 = 0;}
-	if (source == 2)
-	 {mem_buff.entry2 = 0;}
-	if (source == 3)
-	 {mem_buff.entry3 = 0;}
-	if (source == 4)
-	 {mem_buff.entry4 = 0;}
-	data_mem.Update(addr,mem_buff);
-
 	pkt_to_network.addr = addr;
 	pkt_to_network.data = 0;
 	pkt_to_network.source = 0;
-	pkt_to_network.dest = source;
-	strcpy(pkt_to_network.instr,"IA");
+	pkt_to_network.dest = data_mem[addr].head;
+	pkt_to_network.pointer = source;
+	if (source == data_mem[addr].head)
+	 {strcpy(pkt_to_network.instr,"IA");}
+	else
+	 {strcpy(pkt_to_network.instr,"IV");}
+	mem_buff.data = data_mem[addr].data;
+	mem_buff.head = 0;
+	data_mem.Update(addr,mem_buff);
 	send_to_network = true;
 }
 
 $pre
 
   send_to_network = false;
-  pkt_sent = false;
-  update1 = false;
-  update2 = false;
-  update3 = false;
-  update4 = false;
+  mem_buff.head=0;
+  counter = 0;
 
   my_state = MEMORY_IDLE;
   dump_state();
@@ -173,13 +139,14 @@ $phase0
 	 data_in = pkt_from_network.data;
 	 dest = pkt_from_network.dest;
 	 source = pkt_from_network.source;
+	 pointer = pkt_from_network.pointer;
 
 	  if (strcmp(instr,"RR")==0)
 	   {
 	    handle_read();
 	   }
 
-	 else if ((strcmp(instr,"WR")==0) || (strcmp(instr,"WU")==0))
+	 else if (strcmp(instr,"WR")==0)
 	   {
 	    handle_write();
 	   }
@@ -200,111 +167,4 @@ $phase1
 	dump_state();
   }
 
-/* The actions that occur here depend on whether the Cache Policy is
-set to Update or Invalidate.
-For both Writes and Invalidates, the Memory needs to send 0-3 packets,
-depending on directory entries, 1 per clock. During this time the
-Memory remains busy to prevent new requests from arriving.
- */
-
-  if (update && (!update1 && !update2 && !update3 && !update4))
-	{
-	 strcpy(pkt_to_network.instr,"WA");
-	 pkt_to_network.dest = source;
-	 if (strcmp(instr,"WR") == 0)
-          {pkt_to_network.data = mem_buff.data;}
-	 else
-	 {pkt_to_network.data = 0;}
-	 send_NET_PKT(to_network,pkt_to_network);
-	 update = false;
-	 my_state = MEMORY_IDLE;
-	 dump_state();
-	}
-
-  if (update1)
-  {
-	if (Cache_Policy == 0)	// Update
-	 {
-	  strcpy(pkt_to_network.instr,"UD");
-          pkt_to_network.data = mem_buff.data;
-	 }
-	else			// Invalidate
-	 {
-	  mem_buff.entry1 = 0;
-	  data_mem.Update(addr,mem_buff);
-	  dump_state();
-	  strcpy(pkt_to_network.instr,"IV");
-          pkt_to_network.data = 0;
-	 }
-	pkt_to_network.dest = 1;
-	send_NET_PKT(to_network,pkt_to_network);
-	pkt_sent = true;
-	update1 = false;
-  }
-
-
-  if (update2 && !pkt_sent)
-   {
-	if (Cache_Policy == 0)	// Update
-	 {
-	  strcpy(pkt_to_network.instr,"UD");
-          pkt_to_network.data = mem_buff.data;
-	 }
-	else			// Invalidate
-	 {
-	  mem_buff.entry2 = 0;
-	  data_mem.Update(addr,mem_buff);
-	  dump_state();
-	  strcpy(pkt_to_network.instr,"IV");
-          pkt_to_network.data = 0;
-	 }
-	pkt_to_network.dest = 2;
-	send_NET_PKT(to_network,pkt_to_network);
-	pkt_sent = true;
-	update2 = false;
-   }
-
-  if (update3 && !pkt_sent)
-   {
-	if (Cache_Policy == 0)	// Update
-	 {
-	  strcpy(pkt_to_network.instr,"UD");
-          pkt_to_network.data = mem_buff.data;
-	 }
-	else			// Invalidate
-	 {
-	  mem_buff.entry3 = 0;
-	  data_mem.Update(addr,mem_buff);
-	  dump_state();
-	  strcpy(pkt_to_network.instr,"IV");
-          pkt_to_network.data = 0;
-	 }
-	pkt_to_network.dest = 3;
-	send_NET_PKT(to_network,pkt_to_network);
-	pkt_sent = true;
-	update3 = false;
-   }
-
-  if (update4 && !pkt_sent)
-   {
-	if (Cache_Policy == 0)	// Update
-	 {
-	  strcpy(pkt_to_network.instr,"UD");
-          pkt_to_network.data = mem_buff.data;
-	 }
-	else			// Invalidate
-	 {
-	  mem_buff.entry4 = 0;
-	  data_mem.Update(addr,mem_buff);
-	  dump_state();
-          pkt_to_network.data = 0;
-	  strcpy(pkt_to_network.instr,"IV");
-	 }
-	pkt_to_network.dest = 4;
-	send_NET_PKT(to_network,pkt_to_network);
-	pkt_sent = true;
-	update4 = false;
-   }
-
-  pkt_sent = false;
 
