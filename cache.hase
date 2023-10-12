@@ -73,7 +73,7 @@ char instr[5];
 int addr, n_data, p_data;
 int count;
 int own_no;
-char * name;
+const char * name;
 int line, current_line, line_mask;
 int Cache_size;
 
