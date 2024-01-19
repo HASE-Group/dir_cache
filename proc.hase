@@ -10,7 +10,7 @@ $class_decls
  
   bool send_pkt, waiting, finished;
   char action;
-  char * name;
+  const char * name;
   int TC, max_address;
 
   mem_trace_struct current_line;  //Holds line of trace file
